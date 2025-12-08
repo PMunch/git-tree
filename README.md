@@ -19,6 +19,15 @@ coloration. The result of this transformation is that:
 - Staged files have the above plus the keyword "staged" in green (SGR 32)
 - Moved files show the keywords on the new file with a "was &lt;old filename&gt;" appended
 
+Which looks like this in practice:
+![git-tree output](images/git-tree.png)
+
+Combining this `tree` output:
+![tree output](images/tree.png)
+
+With this `git stetus` output:
+![git-status output](images/git-status.png)
+
 To make deleted files show up in the output simple dummy files are `touch`-ed
 into the directory and deleted after the tree is created. This is only done
 after checking that there is nothing there already.

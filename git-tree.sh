@@ -16,7 +16,6 @@ do
       WORKTREE="[32madded[0m" ;;
     'D')
       WORKTREE="[31mdeleted[0m"
-      echo "Deleted: $line"
       if [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
         echo "$TREEPATH/${line:3}" >> $DUMMYFILES
         touch "$TREEPATH/${line:3}"
@@ -44,6 +43,13 @@ do
           WORKTREE="[33mrenamed[0m, [32mstaged[0m";;
         'C')
           WORKTREE="[33mcopied[0m, [32mstaged[0m" ;;
+        'D')
+          WORKTREE="[31mdeleted[0m, [32mstaged[0m"
+          if [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
+            echo "$TREEPATH/${line:3}" >> $DUMMYFILES
+            touch "$TREEPATH/${line:3}"
+          fi
+          ;;
         *)
           WORKTREE="unmatched?" ;;
       esac
