@@ -32,5 +32,5 @@ To make deleted files show up in the output simple dummy files are `touch`-ed
 into the directory and deleted after the tree is created. This is only done
 after checking that there is nothing there already.
 
-This is at the moment just a quick script I threw together, it doesn't handle
-all scenarios of git output, and could easily be improved.
+This is at the moment just a quick script I threw together, it should handle
+all cases of git status output, but could easily be improved.

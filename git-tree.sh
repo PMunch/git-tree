@@ -7,65 +7,62 @@ INFOFILE=$(mktemp)
 DUMMYFILES=$(mktemp)
 git -C "$TREEPATH" status --porcelain | while IFS= read -r line;
 do
-  case ${line:1:1} in
-    'M')
-      WORKTREE="[33mmodified[0m" ;;
-    'T')
-      WORKTREE="[33mfile type changed[0m" ;;
-    'A')
-      WORKTREE="[32madded[0m" ;;
-    'D')
-      WORKTREE="[31mdeleted[0m"
-      if [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
-        echo "$TREEPATH/${line:3}" >> "$DUMMYFILES"
-        touch "$TREEPATH/${line:3}"
-      fi
-      ;;
-    'R')
-      WORKTREE="[33mrenamed[0m" ;;
-    'C')
-      WORKTREE="[33mcopied[0m" ;;
-    'U')
-      WORKTREE="[33mupdated[0m" ;;
-    '?')
-      WORKTREE="untracked" ;;
-    '!')
-      WORKTREE="ignored" ;;
-    ' ')
-      case ${line:0:1} in
-        'M')
-          WORKTREE="[33mmodified[0m, [32mstaged[0m" ;;
-        'T')
-          WORKTREE="[33mfile type changed[0m, [32mstaged[0m" ;;
-        'A')
-          WORKTREE="[32madded[0m, [32mstaged[0m" ;;
-        'R')
-          WORKTREE="[33mrenamed[0m, [32mstaged[0m";;
-        'C')
-          WORKTREE="[33mcopied[0m, [32mstaged[0m" ;;
-        'D')
-          WORKTREE="[31mdeleted[0m, [32mstaged[0m"
-          if [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
-            echo "$TREEPATH/${line:3}" >> "$DUMMYFILES"
-            touch "$TREEPATH/${line:3}"
-          fi
-          ;;
-        *)
-          WORKTREE="unmatched?" ;;
-      esac
-      ;;
-    *)
-      WORKTREE="unmatched?" ;;
+  # TODO: Add back deleted files and "was" tracking
+  STATUS=""
+  INDEX=""
+  case ${line:0:1} in
+    'M') INDEX="[33mmodified[0m" ;;
+    'A') INDEX="[32madded[0m" ;;
+    'D') INDEX="[31mdeleted[0m" ;;
+    'R') INDEX="[33mrenamed[0m" ;;
+    'C') INDEX="[33mcopied[0m" ;;
   esac
+  WORKTREE=""
+  case ${line:1:1} in
+    'M') WORKTREE="[33mmodified[0m" ;;
+    'A') WORKTREE="[32madded[0m" ;;
+    'D') WORKTREE="[31mdeleted[0m" ;;
+    'R') WORKTREE="[33mrenamed[0m" ;;
+    'C') WORKTREE="[33mcopied[0m" ;;
+  esac
+  MERGE=""
+  case ${line:0:2} in
+    'DD') MERGE="[31munmerged[0m, [33mboth deleted[0m" ;;
+    'AU') MERGE="[31munmerged[0m, [33madded by us[0m" ;;
+    'UD') MERGE="[31munmerged[0m, [33mdeleted by them[0m" ;;
+    'UA') MERGE="[31munmerged[0m, [33madded by them[0m" ;;
+    'DU') MERGE="[31munmerged[0m, [33mdeleted by us[0m" ;;
+    'AA') MERGE="[31munmerged[0m, [33mboth added[0m" ;;
+    'UU') MERGE="[31munmerged[0m, [33mboth modified[0m" ;;
+    '??') MERGE="untracked" ;;
+  esac
+  if [[ "${line:0:2}" =~ 'D' ]] && [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
+    echo "$TREEPATH/${line:3}" >> "$DUMMYFILES"
+    touch "$TREEPATH/${line:3}"
+  fi
+  if [ -n "$MERGE" ]; then
+    STATUS="$MERGE"
+  else
+    if [ -n "$INDEX" ]; then
+      STATUS="$INDEX, [32mstaged[0m"
+    fi
+    if [ -n "$WORKTREE" ]; then
+      if [ -n "$STATUS" ]; then
+        STATUS="$STATUS, further "
+      fi
+      STATUS="$STATUS$WORKTREE"
+    fi
+  fi
+
   if [ -d "$TREEPATH/${line:3}" ]; then
-    echo -e "$TREEPATH/${line:3}*\n\t$WORKTREE" >> "$INFOFILE"
+    echo -e "$TREEPATH/${line:3}*\n\t$STATUS" >> "$INFOFILE"
   fi
   if [[ "$line" =~ " -> " ]]; then
     arrow=" -> "
     line="${line:3}"
-    echo -e "$TREEPATH/${line#*"$arrow"}\n\t$WORKTREE was ${line%"$arrow"*}" >> "$INFOFILE"
+    echo -e "$TREEPATH/${line#*"$arrow"}\n\t$STATUS was ${line%"$arrow"*}" >> "$INFOFILE"
   else
-    echo -e "$TREEPATH/${line:3}\n\t$WORKTREE" >> "$INFOFILE"
+    echo -e "$TREEPATH/${line:3}\n\t$STATUS" >> "$INFOFILE"
   fi
 done
 
