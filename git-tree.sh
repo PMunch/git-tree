@@ -5,6 +5,9 @@ TREEPATH=${*: -1}
 
 INFOFILE=$(mktemp)
 DUMMYFILES=$(mktemp)
+SUBMODULES=$(mktemp)
+# TODO: Use git rev-parse --show-prefix to ignore changes not in listed directory and correctly create relative paths
+git -C "$TREEPATH" config get --file .gitmodules --all --regex '\.path$' > "$SUBMODULES"
 git -C "$TREEPATH" status --porcelain | while IFS= read -r line;
 do
   # TODO: Add back deleted files and "was" tracking
@@ -55,7 +58,16 @@ do
   fi
 
   if [ -d "$TREEPATH/${line:3}" ]; then
-    echo -e "$TREEPATH/${line:3}*\n\t$STATUS" >> "$INFOFILE"
+    if [ "${line: -1}" == "/" ]; then
+      echo -e "$TREEPATH/${line:3}**/*\n\t$STATUS" >> "$INFOFILE"
+    else
+      # Submodule
+      case ${line:0:2} in
+        ' M') STATUS="submodule, [33mmodified[0m" ;;
+      esac
+      echo -e "$TREEPATH/${line:3}/**/*\n\tignore" >> "$INFOFILE"
+      echo -e "${line:3}" >> "$SUBMODULES"
+    fi
   fi
   if [[ "$line" =~ " -> " ]]; then
     arrow=" -> "
@@ -66,10 +78,17 @@ do
   fi
 done
 
-tree --dirsfirst --infofile "$INFOFILE" -C --gitignore "$@" | sed -z 's/─ \([^\n]*\)\n[^{\n]*{ untracked/─ [2m\1[0m/g; s/─ \([^\n]*\)\n[^{\n]*{ \([^\n]*\)/─ \1 - \2/g'
+cat "$SUBMODULES" | sort | uniq -u | while IFS= read -r line;
+do
+  echo -e "$TREEPATH/${line}\n\tsubmodule" >> "$INFOFILE"
+  echo -e "$TREEPATH/${line}/**/*\n\tignore" >> "$INFOFILE"
+done
+
+tree --dirsfirst --infofile "$INFOFILE" -C --gitignore "$@" | sed -z 's/─ \([^\n]*\)\n[^{\n]*{ untracked/─ [2m\1[0m/g; s/\n[^─\n]*── \([^\n]*\)\n[^{\n]*{ ignore//g; s/─ \([^\n]*\)\n[^{\n]*{ \([^\n]*\)/─ \1 - \2/g'
 rm "$INFOFILE"
 while IFS= read -r line;
 do
   rm "$line"
 done < "$DUMMYFILES"
 rm "$DUMMYFILES"
+rm "$SUBMODULES"
