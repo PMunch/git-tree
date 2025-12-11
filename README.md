@@ -32,5 +32,21 @@ To make deleted files show up in the output simple dummy files are `touch`-ed
 into the directory and deleted after the tree is created. This is only done
 after checking that there is nothing there already.
 
-This is at the moment just a quick script I threw together, it should handle
+This script is a bit of a hack since it processes trees output, it should handle
 all cases of git status output, but could easily be improved.
+
+## Why not just re-implement tree?
+When considering how to achieve my goal of getting a git-aware tree output I
+considered simply re-implementing the structure found in tree in a program that
+could also check the output of Git. I decided against this approach for two
+reasons:
+
+- Tree supports a lot more than just the simple file listing output. You have
+  filtering options, permissions and size listings, etc. etc. Just having the
+  tree listing is what I was after, but by re-using tree I get a lot of extra
+  features "for free"
+- It's always fun to combine programs in different ways to achieve something.
+  This is in my opinion one of the things which makes the Linux shell so
+  powerful. There are always gotchas however, and the only way to improve your
+  shell-foo is by using the shell. So I viewed this as a nice learning
+  opportunity.
