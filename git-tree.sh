@@ -2,15 +2,37 @@
 TREEPATH=${*: -1}
 [ "$TREEPATH" = "$0" ] && TREEPATH="."
 [ "${TREEPATH:0:1}" = "-" ] && TREEPATH="."
+TREEPATH="${TREEPATH%"/"}"
 
 INFOFILE=$(mktemp)
 DUMMYFILES=$(mktemp)
 SUBMODULES=$(mktemp)
-# TODO: Use git rev-parse --show-prefix to ignore changes not in listed directory and correctly create relative paths
-git -C "$TREEPATH" config get --file .gitmodules --all --regex '\.path$' > "$SUBMODULES"
-git -C "$TREEPATH" status --porcelain | while IFS= read -r line;
+TOPLEVEL="$(git -C "$TREEPATH" rev-parse --show-toplevel)"
+gitstatus=$?
+if [ "$gitstatus" -ne 0 ]; then
+  exit "$gitstatus"
+fi
+PREFIX="$(git -C "$TREEPATH" rev-parse --show-prefix)"
+git -C "$TOPLEVEL" config get --file .gitmodules --all --regex '\.path$' > "$SUBMODULES"
+git -C "$TOPLEVEL" status --porcelain | while IFS= read -r line;
 do
-  # TODO: Add back deleted files and "was" tracking
+  FILENAME="${line:3}"
+  WAS=""
+  if [[ "$line" =~ " -> " ]]; then
+    arrow=" -> "
+    WAS="${FILENAME%"$arrow"*}"
+    FILENAME="${FILENAME#*"$arrow"}"
+  fi
+  if [[ ! "$FILENAME" == "$PREFIX"* ]]; then
+    # Ignore the status of files not in the requested directory
+    continue
+  fi
+  if [ -n "$WAS" ]; then
+    relative="$(realpath --relative-to="$(dirname "$FILENAME")" "$(dirname "$WAS")")"
+    base="$(basename "$WAS")"
+    WAS="$relative/$base"
+  fi
+  FILENAME="${FILENAME#"$PREFIX"}"
   STATUS=""
   INDEX=""
   case ${line:0:1} in
@@ -39,9 +61,9 @@ do
     'UU') MERGE="[31munmerged[0m, [33mboth modified[0m" ;;
     '??') MERGE="untracked" ;;
   esac
-  if [[ "${line:0:2}" =~ 'D' ]] && [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/${line:3}" ]; then
-    echo "$TREEPATH/${line:3}" >> "$DUMMYFILES"
-    touch "$TREEPATH/${line:3}"
+  if [[ "${line:0:2}" =~ 'D' ]] && [[ ! "$line" =~ " -> " ]] && [ ! -e "$TREEPATH/$FILENAME" ]; then
+    echo "$TREEPATH/$FILENAME" >> "$DUMMYFILES"
+    touch "$TREEPATH/$FILENAME"
   fi
   if [ -n "$MERGE" ]; then
     STATUS="$MERGE"
@@ -57,31 +79,30 @@ do
     fi
   fi
 
-  if [ -d "$TREEPATH/${line:3}" ]; then
+  if [ -d "$TREEPATH/$FILENAME" ]; then
     if [ "${line: -1}" == "/" ]; then
-      echo -e "$TREEPATH/${line:3}**/*\n\t$STATUS" >> "$INFOFILE"
+      echo -e "$TREEPATH/$FILENAME**/*\n\t$STATUS" >> "$INFOFILE"
     else
       # Submodule
       case ${line:0:2} in
         ' M') STATUS="submodule, [33mmodified[0m" ;;
       esac
-      echo -e "$TREEPATH/${line:3}/**/*\n\tignore" >> "$INFOFILE"
+      echo -e "$TREEPATH/$FILENAME/**/*\n\tignore" >> "$INFOFILE"
       echo -e "${line:3}" >> "$SUBMODULES"
     fi
   fi
-  if [[ "$line" =~ " -> " ]]; then
-    arrow=" -> "
-    line="${line:3}"
-    echo -e "$TREEPATH/${line#*"$arrow"}\n\t$STATUS was ${line%"$arrow"*}" >> "$INFOFILE"
+  if [ -n "$WAS" ]; then
+    echo -e "$TREEPATH/$FILENAME\n\t$STATUS was $WAS" >> "$INFOFILE"
   else
-    echo -e "$TREEPATH/${line:3}\n\t$STATUS" >> "$INFOFILE"
+    echo -e "$TREEPATH/$FILENAME\n\t$STATUS" >> "$INFOFILE"
   fi
 done
 
 cat "$SUBMODULES" | sort | uniq -u | while IFS= read -r line;
 do
-  echo -e "$TREEPATH/${line}\n\tsubmodule" >> "$INFOFILE"
-  echo -e "$TREEPATH/${line}/**/*\n\tignore" >> "$INFOFILE"
+  FILENAME="${line#"$PREFIX"}"
+  echo -e "$TREEPATH/${FILENAME}\n\tsubmodule" >> "$INFOFILE"
+  echo -e "$TREEPATH/${FILENAME}/**/*\n\tignore" >> "$INFOFILE"
 done
 
 tree --dirsfirst --infofile "$INFOFILE" -C --gitignore "$@" | sed -z 's/─ \([^\n]*\)\n[^{\n]*{ untracked/─ [2m\1[0m/g; s/\n[^─\n]*── \([^\n]*\)\n[^{\n]*{ ignore//g; s/─ \([^\n]*\)\n[^{\n]*{ \([^\n]*\)/─ \1 - \2/g'
